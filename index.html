@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#28483d">
+  <title>Hello, Meadow!</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #20392f;
+      --paper: #fffdf2;
+      --coral: #e96950;
+      --yellow: #f5ca62;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      padding: 22px;
+      display: grid;
+      place-items: center;
+      overflow-x: hidden;
+      color: var(--ink);
+      background-color: #e9eee2;
+      background-image: radial-gradient(#28483d10 .8px, transparent .8px);
+      background-size: 7px 7px;
+      font-family: Georgia, "Times New Roman", serif;
+    }
+
+    .game { width: min(100%, 1000px); }
+
+    .topline {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 0 2px 13px;
+    }
+
+    .wordmark {
+      margin: 0;
+      font-size: clamp(26px, 5vw, 42px);
+      line-height: .96;
+      letter-spacing: 0;
+    }
+
+    .wordmark span { color: var(--coral); }
+
+    .day-label, .meter, .hint, .mobile-controls button {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .day-label {
+      padding-bottom: 3px;
+      font-size: 11px;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    .screen {
+      position: relative;
+      overflow: hidden;
+      border: 3px solid var(--ink);
+      border-radius: 5px;
+      background: #9dc778;
+      box-shadow: 8px 8px 0 #20392f;
+      animation: appear .5s ease-out both;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      aspect-ratio: 5 / 3;
+      image-rendering: auto;
+    }
+
+    .hud {
+      position: absolute;
+      inset: 12px 12px auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .meter, .bubble {
+      border: 2px solid var(--ink);
+      border-radius: 3px;
+      background: var(--paper);
+      box-shadow: 3px 3px 0 #20392f55;
+    }
+
+    .meter {
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .meter span { color: var(--coral); }
+
+    .bubble {
+      max-width: 48%;
+      padding: 8px 11px;
+      font-size: 14px;
+      text-align: center;
+      animation: pop .22s ease-out both;
+    }
+
+    .bottomline {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 2px 0;
+    }
+
+    .hint { margin: 0; font-size: 11px; line-height: 1.7; }
+    .hint strong { color: var(--coral); }
+
+    .mobile-controls {
+      display: none;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .mobile-controls button {
+      width: 42px;
+      height: 40px;
+      padding: 0;
+      border: 2px solid var(--ink);
+      border-radius: 4px;
+      color: var(--ink);
+      background: var(--paper);
+      font-size: 16px;
+      touch-action: none;
+    }
+
+    .mobile-controls .say-button {
+      width: auto;
+      padding: 0 12px;
+      color: var(--paper);
+      background: var(--coral);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .mobile-controls button:active { transform: translateY(2px); }
+
+    @keyframes appear {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pop {
+      from { opacity: 0; transform: translateY(5px) scale(.96); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    @media (max-width: 620px) {
+      body { padding: 14px 12px; align-content: center; }
+      .screen { box-shadow: 5px 5px 0 #20392f; }
+      .hud { inset: 7px 7px auto; }
+      .meter { padding: 6px 7px; font-size: 10px; }
+      .bubble { padding: 6px 8px; font-size: 12px; }
+      .bottomline { align-items: flex-start; }
+      .hint { font-size: 10px; }
+      .mobile-controls { display: flex; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="game" aria-label="Hello, Meadow game">
+    <header class="topline">
+      <h1 class="wordmark">hello, <span>meadow!</span></h1>
+      <div class="day-label">A very good day to meet</div>
+    </header>
+
+    <section class="screen" aria-label="Game world">
+      <canvas id="world" width="1000" height="600" aria-label="Use the arrow keys to explore the meadow"></canvas>
+      <div class="hud">
+        <div class="meter" aria-live="polite">NEIGHBORS <span id="score">0 / 5</span></div>
+        <div class="bubble" id="bubble" hidden aria-live="polite"></div>
+      </div>
+    </section>
+
+    <footer class="bottomline">
+      <p class="hint"><strong>WASD / arrows</strong> wander &nbsp;·&nbsp; <strong>SPACE</strong> say hello<br>Say hello to everyone in the meadow.</p>
+      <div class="mobile-controls" aria-label="Touch controls">
+        <button type="button" data-move="up" aria-label="Move up">↑</button>
+        <button type="button" data-move="left" aria-label="Move left">←</button>
+        <button type="button" data-move="down" aria-label="Move down">↓</button>
+        <button type="button" data-move="right" aria-label="Move right">→</button>
+        <button type="button" class="say-button" id="say-button">SAY HI</button>
+      </div>
+    </footer>
+  </main>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('world');
+      const context = canvas.getContext('2d');
+      const scoreLabel = document.getElementById('score');
+      const bubble = document.getElementById('bubble');
+      const width = canvas.width;
+      const height = canvas.height;
+      const world = { width: 1800, height: 1250 };
+      const keys = new Set();
+      const neighbors = [
+        { x: 410, y: 390, name: 'Mabel', color: '#e97857', hat: '#f5ca62' },
+        { x: 895, y: 330, name: 'Theo', color: '#6488bd', hat: '#d5e5bb' },
+        { x: 1370, y: 475, name: 'Pip', color: '#c27b9d', hat: '#f5ca62' },
+        { x: 590, y: 850, name: 'June', color: '#e2a53e', hat: '#afc98c' },
+        { x: 1240, y: 895, name: 'Sol', color: '#587f66', hat: '#e97857' },
+      ];
+      const player = { x: 890, y: 655, facing: 1, step: 0 };
+      let camera = { x: 0, y: 0 };
+      let lastTime = 0;
+      let messageTimer = 0;
+      let celebration = 0;
+
+      function roundedRect(x, y, w, h, radius, color) {
+        context.fillStyle = color;
+        context.beginPath();
+        context.roundRect(x, y, w, h, radius);
+        context.fill();
+      }
+
+      function drawWorld() {
+        context.fillStyle = '#9dc778';
+        context.fillRect(0, 0, world.width, world.height);
+
+        let seed = 41;
+        const random = () => {
+          seed = (seed * 16807) % 2147483647;
+          return (seed - 1) / 2147483646;
+        };
+
+        for (let i = 0; i < 430; i++) {
+          const x = random() * world.width;
+          const y = random() * world.height;
+          context.fillStyle = i % 3 === 0 ? '#b5d58b' : '#88b866';
+          context.beginPath();
+          context.ellipse(x, y, 2 + random() * 4, 1 + random() * 2, random(), 0, Math.PI * 2);
+          context.fill();
+        }
+
+        context.lineCap = 'round';
+        context.lineJoin = 'round';
+        context.beginPath();
+        context.moveTo(-60, 565);
+        context.bezierCurveTo(320, 550, 385, 670, 720, 635);
+        context.bezierCurveTo(1040, 600, 1100, 505, 1450, 555);
+        context.bezierCurveTo(1640, 585, 1710, 640, 1870, 620);
+        context.strokeStyle = '#d6bd82';
+        context.lineWidth = 144;
+        context.stroke();
+        context.strokeStyle = '#ecd59d';
+        context.lineWidth = 126;
+        context.stroke();
+
+        context.beginPath();
+        context.moveTo(820, 1300);
+        context.bezierCurveTo(845, 1060, 770, 970, 740, 830);
+        context.bezierCurveTo(720, 755, 752, 700, 825, 660);
+        context.strokeStyle = '#d6bd82';
+        context.lineWidth = 110;
+        context.stroke();
+        context.strokeStyle = '#ecd59d';
+        context.lineWidth = 94;
+        context.stroke();
+
+        drawHouse(170, 190, '#d98263', '#efc975');
+        drawHouse(1480, 210, '#f0d998', '#668879');
+        drawHouse(1440, 890, '#d7e1bc', '#db9068');
+
+        drawFlowerPatch(90, 720, 260);
+        drawFlowerPatch(1060, 170, 220);
+        drawFlowerPatch(1600, 760, 230);
+        drawFlowerPatch(390, 1050, 190);
+
+        for (const tree of [
+          [75, 290, 1.1], [315, 145, .85], [600, 215, 1], [1080, 130, .9],
+          [1660, 355, 1.05], [1740, 840, .95], [1040, 1030, 1.15], [285, 895, 1],
+          [80, 1070, .8], [1350, 1110, 1.05], [530, 490, .65], [1050, 700, .7],
+        ]) drawTree(...tree);
+
+        drawSign(884, 520);
+      }
+
+      function drawHouse(x, y, wall, roof) {
+        context.fillStyle = '#30483d30';
+        context.beginPath();
+        context.ellipse(x + 78, y + 100, 103, 22, 0, 0, Math.PI * 2);
+        context.fill();
+        context.fillStyle = roof;
+        context.beginPath();
+        context.moveTo(x - 15, y + 32);
+        context.lineTo(x + 80, y - 28);
+        context.lineTo(x + 175, y + 32);
+        context.closePath();
+        context.fill();
+        roundedRect(x + 5, y + 30, 150, 88, 5, wall);
+        roundedRect(x + 25, y + 52, 30, 32, 3, '#d5edf0');
+        roundedRect(x + 105, y + 52, 30, 32, 3, '#d5edf0');
+        context.strokeStyle = '#fff9e8';
+        context.lineWidth = 3;
+        context.beginPath();
+        context.moveTo(x + 40, y + 52); context.lineTo(x + 40, y + 84);
+        context.moveTo(x + 25, y + 68); context.lineTo(x + 55, y + 68);
+        context.moveTo(x + 120, y + 52); context.lineTo(x + 120, y + 84);
+        context.moveTo(x + 105, y + 68); context.lineTo(x + 135, y + 68);
+        context.stroke();
+        roundedRect(x + 65, y + 75, 30, 43, 3, '#9d624c');
+        context.fillStyle = '#f5ca62';
+        context.beginPath(); context.arc(x + 88, y + 96, 2.5, 0, Math.PI * 2); context.fill();
+      }
+
+      function drawTree(x, y, scale) {
+        context.save();
+        context.translate(x, y);
+        context.scale(scale, scale);
+        context.fillStyle = '#516a4330';
+        context.beginPath(); context.ellipse(0, 15, 36, 12, 0, 0, Math.PI * 2); context.fill();
+        roundedRect(-8, -9, 16, 36, 5, '#856548');
+        for (const [cx, cy, r, color] of [
+          [-19, -20, 23, '#477450'], [12, -34, 27, '#58875a'], [0, -57, 25, '#6d995c'],
+          [24, -16, 18, '#76a668'], [-25, -49, 17, '#78a767'],
+        ]) {
+          context.fillStyle = color;
+          context.beginPath(); context.arc(cx, cy, r, 0, Math.PI * 2); context.fill();
+        }
+        context.restore();
+      }
+
+      function drawFlowerPatch(x, y, count) {
+        const petals = ['#fff0bd', '#f4a18c', '#fff9e8', '#e9c85d'];
+        for (let i = 0; i < count; i++) {
+          const fx = x + ((i * 47) % 180) - 65;
+          const fy = y + ((i * 31) % 100) - 38;
+          context.fillStyle = petals[i % petals.length];
+          context.beginPath(); context.arc(fx, fy, i % 5 === 0 ? 3 : 2, 0, Math.PI * 2); context.fill();
+          context.fillStyle = '#fff9e8';
+          context.beginPath(); context.arc(fx, fy, 1, 0, Math.PI * 2); context.fill();
+        }
+      }
+
+      function drawSign(x, y) {
+        roundedRect(x - 4, y, 8, 41, 3, '#856548');
+        roundedRect(x - 40, y - 22, 80, 29, 4, '#fff3d4');
+        context.fillStyle = '#405b43';
+        context.font = 'bold 12px Georgia';
+        context.textAlign = 'center';
+        context.fillText('MEADOW', x, y - 3);
+      }
+
+      function drawPerson(x, y, shirt, hat, phase, isPlayer = false) {
+        context.save();
+        context.translate(x, y + Math.sin(phase) * 2);
+        const moving = isPlayer && keys.size > 0;
+        const stride = moving ? Math.sin(phase * 2) * 4 : 0;
+        context.fillStyle = '#30483d32';
+        context.beginPath(); context.ellipse(0, 2, 15, 6, 0, 0, Math.PI * 2); context.fill();
+
+        roundedRect(-8 + stride, -4, 6, 11, 3, '#f2d5b2');
+        roundedRect(2 - stride, -4, 6, 11, 3, '#f2d5b2');
+        roundedRect(-12, -23, 24, 23, 7, shirt);
+        context.fillStyle = '#f1cda8';
+        context.beginPath(); context.arc(0, -32, 10, 0, Math.PI * 2); context.fill();
+        context.fillStyle = '#4d433b';
+        context.beginPath(); context.arc(-3 + player.facing, -33, 1.4, 0, Math.PI * 2); context.fill();
+        context.beginPath(); context.arc(4 + player.facing, -33, 1.4, 0, Math.PI * 2); context.fill();
+        context.fillStyle = '#fff9e8';
+        context.beginPath(); context.arc(1, -28, 2.4, 0, Math.PI); context.fill();
+        context.fillStyle = hat;
+        context.beginPath();
+        context.ellipse(0, -41, 13, 4, 0, Math.PI, Math.PI * 2);
+        context.fill();
+        roundedRect(-8, -50, 16, 10, 3, hat);
+        if (isPlayer) {
+          context.fillStyle = '#f5ca62';
+          context.beginPath(); context.arc(-11, -22, 3, 0, Math.PI * 2); context.fill();
+        }
+        context.restore();
+      }
+
+      function sayHello() {
+        const nearby = neighbors
+          .filter(person => Math.hypot(person.x - player.x, person.y - player.y) < 112)
+          .sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))[0];
+        if (!nearby) {
+          bubble.textContent = 'Hello, world!';
+        } else if (nearby.greeted) {
+          bubble.textContent = `${nearby.name} waves back!`;
+        } else {
+          nearby.greeted = true;
+          scoreLabel.textContent = `${neighbors.filter(person => person.greeted).length} / ${neighbors.length}`;
+          bubble.textContent = `“Hello, world!”  ${nearby.name}: “Hi there!”`;
+          if (neighbors.every(person => person.greeted)) celebration = 4;
+        }
+        bubble.hidden = false;
+        messageTimer = 3;
+      }
+
+      function update(delta) {
+        const speed = keys.has('shift') ? 255 : 175;
+        let dx = 0;
+        let dy = 0;
+        if (keys.has('arrowleft') || keys.has('a') || keys.has('left')) dx--;
+        if (keys.has('arrowright') || keys.has('d') || keys.has('right')) dx++;
+        if (keys.has('arrowup') || keys.has('w') || keys.has('up')) dy--;
+        if (keys.has('arrowdown') || keys.has('s') || keys.has('down')) dy++;
+        if (dx || dy) {
+          const length = Math.hypot(dx, dy);
+          player.x += dx / length * speed * delta;
+          player.y += dy / length * speed * delta;
+          player.facing = dx < 0 ? -1 : dx > 0 ? 1 : player.facing;
+          player.step += delta * 11;
+        }
+        player.x = Math.max(28, Math.min(world.width - 28, player.x));
+        player.y = Math.max(55, Math.min(world.height - 15, player.y));
+        camera.x = Math.max(0, Math.min(world.width - width, player.x - width / 2));
+        camera.y = Math.max(0, Math.min(world.height - height, player.y - height / 2));
+        messageTimer = Math.max(0, messageTimer - delta);
+        if (!messageTimer) bubble.hidden = true;
+        celebration = Math.max(0, celebration - delta);
+      }
+
+      function render(time) {
+        context.clearRect(0, 0, width, height);
+        context.save();
+        context.translate(-camera.x, -camera.y);
+        drawWorld();
+        for (const person of neighbors) {
+          drawPerson(person.x, person.y, person.color, person.hat, time / 440 + person.x);
+          if (person.greeted) {
+            context.fillStyle = '#fff3d4';
+            context.font = 'bold 17px Georgia';
+            context.textAlign = 'center';
+            context.fillText('♥', person.x, person.y - 58);
+          }
+        }
+        drawPerson(player.x, player.y, '#e96950', '#f5ca62', player.step, true);
+        context.restore();
+        if (celebration > 0) {
+          context.fillStyle = `rgba(255, 249, 232, ${Math.min(.78, celebration * .28)})`;
+          context.fillRect(0, 0, width, height);
+          context.fillStyle = '#20392f';
+          context.font = 'bold 30px Georgia';
+          context.textAlign = 'center';
+          context.fillText('The whole meadow says hello!', width / 2, height / 2);
+        }
+      }
+
+      function frame(time) {
+        const delta = Math.min((time - lastTime) / 1000 || 0, .04);
+        lastTime = time;
+        update(delta);
+        render(time);
+        requestAnimationFrame(frame);
+      }
+
+      window.addEventListener('keydown', event => {
+        const key = event.key.toLowerCase();
+        if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) event.preventDefault();
+        if (key === ' ' && !event.repeat) sayHello();
+        keys.add(key);
+      });
+      window.addEventListener('keyup', event => keys.delete(event.key.toLowerCase()));
+      window.addEventListener('blur', () => keys.clear());
+
+      document.querySelectorAll('[data-move]').forEach(button => {
+        const direction = button.dataset.move;
+        button.addEventListener('pointerdown', event => {
+          event.preventDefault();
+          button.setPointerCapture(event.pointerId);
+          keys.add(direction);
+        });
+        const release = () => keys.delete(direction);
+        button.addEventListener('pointerup', release);
+        button.addEventListener('pointercancel', release);
+        button.addEventListener('lostpointercapture', release);
+      });
+      document.getElementById('say-button').addEventListener('click', sayHello);
+
+      drawWorld();
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>
